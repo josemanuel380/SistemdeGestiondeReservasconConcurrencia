@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,20 +42,26 @@ public class AcientoReservaController {
 
     @PostMapping("/inicializar-sala")
     public String inicializarSala() {
-        Asiento a1 = new Asiento("H-11", 502L, false, null, null);
-        Asiento a2 = new Asiento("H-12", 502L, false, null, null); // Nuestro asiento de prueba
-        Asiento a3 = new Asiento("H-13", 502L, false, null, null);
-
-        // Al guardar entidades nuevas sin versión, JPA les asigna version: 0 por
-        // defecto
-        repository.saveAll(List.of(a1, a2, a3));
-
-        return "Sala inicializada con éxito. Asientos listos con versión 0.";
+        List<Asiento> asientos = new java.util.ArrayList<>();
+        String[] filas = { "A", "B", "C", "D", "E", "F", "G", "H" };
+        for (String fila : filas) {
+            for (int num = 1; num <= 10; num++) {
+                String codigo = fila + "-" + String.format("%02d", num);
+                asientos.add(new Asiento(codigo, 502L, false, null, null));
+            }
+        }
+        repository.saveAll(asientos);
+        return "Sala inicializada con " + asientos.size() + " asientos para la función 502.";
     }
 
     @GetMapping("/asientos")
     public List<Asiento> listarAsientos() {
         return repository.findAll();
+    }
+
+    @GetMapping("/asientos/{funcionId}")
+    public List<Asiento> listarAsientosPorFuncion(@PathVariable Long funcionId) {
+        return repository.findByFuncionId(funcionId);
     }
 
 }

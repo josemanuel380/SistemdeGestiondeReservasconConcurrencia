@@ -1,0 +1,20 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: #0a0a0f;
+  color: #e8e8e8;
+  line-height: 1.5;
+}
+
+::selection {
+  background: rgba(245, 175, 25, 0.3);
+}

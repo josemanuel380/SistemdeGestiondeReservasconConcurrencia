@@ -8,6 +8,8 @@ public class SistemdeGestiondeReservasconConcurrenciaApplication {
 
 	public static void main(String[] args) {
 		SpringApplication.run(SistemdeGestiondeReservasconConcurrenciaApplication.class, args);
+
+
 	}
 
 }

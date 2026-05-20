@@ -20,7 +20,7 @@ import lombok.Setter;
 public class Asiento {
     @Id
     private String codigoAsiento; // Ej: "H-12"
-    private Long funcionId;
+    private Long funcionId; //
     private boolean ocupado;
     private String usuarioEmail;
 
