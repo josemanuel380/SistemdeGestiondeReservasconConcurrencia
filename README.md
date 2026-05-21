@@ -11,12 +11,33 @@ Sistema de reserva de asientos de cine con manejo de concurrencia mediante **opt
 | Base de datos | H2 (en memoria) |
 | Persistencia | JPA / Hibernate |
 | Concurrencia | Optimistic Locking (`@Version`) |
+| Contenerización | Docker + Docker Compose |
 
 ## Arquitectura
+
+### Desarrollo local
 
 ```
 Cliente (Angular :4200)  -->  API REST (Spring :8081)  -->  H2 (memoria)
 ```
+
+### Docker
+
+```
+                                        ┌──────────────────┐
+                                        │                  │
+Usuario ──► Nginx (:80) ──► /api/* ────►  Spring Boot     │
+               │                       │  (:8081)          │
+               │                       │         │         │
+               └──► / (static files)   │         └──► H2   │
+                                        │          (mem)    │
+                                        └──────────────────┘
+
+        Contenedor frontend                Contenedor backend
+        (nginx:alpine)                     (eclipse-temurin:21)
+```
+
+Ambos contenedores se comunican a través de la red bridge `reservas-network` definida en `docker-compose.yml`.
 
 ### Backend — Capas
 
@@ -51,7 +72,27 @@ main.ts  →  App (componente standalone)  →  ReservaService  →  API
 
 ## Cómo ejecutar
 
-### 1. Backend (Spring Boot)
+### Opción A — Docker (recomendado)
+
+Construye y levanta el backend y el frontend en contenedores:
+
+```bash
+docker compose up --build
+```
+
+- **Frontend**: http://localhost
+- **API**: http://localhost:8081
+- **Consola H2**: http://localhost:8081/h2-console
+
+Para detener los contenedores:
+
+```bash
+docker compose down
+```
+
+### Opción B — Desarrollo local
+
+#### 1. Backend (Spring Boot)
 
 ```bash
 ./mvnw spring-boot:run
@@ -59,7 +100,7 @@ main.ts  →  App (componente standalone)  →  ReservaService  →  API
 
 El servidor arranca en `http://localhost:8081`.
 
-### 2. Frontend (Angular)
+#### 2. Frontend (Angular)
 
 ```bash
 cd frontend
@@ -69,7 +110,7 @@ npm start
 
 El servidor de desarrollo arranca en `http://localhost:4200`.
 
-### 3. Acceder
+#### 3. Acceder
 
 - **Frontend**: http://localhost:4200
 - **API**: http://localhost:8081
@@ -90,11 +131,72 @@ El frontend incluye un simulador que envía N requests simultáneas sobre el mis
 
 ## Configuración
 
-Backend (`application.properties`):
-- Puerto: `8081`
-- DB: H2 en memoria `jdbc:h2:mem:reservaAcientoCine`
-- DDL: `create` (se recrea la BD al iniciar)
-- SQL logging: activado
+### Backend
 
-Frontend:
+Archivo: `src/main/resources/application.yml`
+
+| Propiedad | Valor | Descripción |
+|-----------|-------|-------------|
+| `server.port` | `8081` | Puerto del servidor |
+| `spring.datasource.url` | `jdbc:h2:mem:reservaAcientoCine` | Base de datos H2 en memoria |
+| `spring.jpa.hibernate.ddl-auto` | `create` | Recrea la BD al iniciar |
+| `spring.jpa.show-sql` | `true` | Log de consultas SQL |
+| `spring.h2.console.enabled` | `true` | Consola H2 accesible |
+
+### Frontend
+
 - Proxy a backend en `http://localhost:8081` (configurado en `ReservaService`)
+- En Docker, Nginx redirige `/api/*` al contenedor backend mediante `proxy_pass`
+
+### Docker
+
+Archivos de configuración:
+
+| Archivo | Propósito |
+|---------|-----------|
+| `Dockerfile` | Build multi-etapa del backend: compila con Maven, ejecuta con JRE 21 |
+| `frontend/Dockerfile` | Build multi-etapa del frontend: compila con Node 22, sirve con Nginx |
+| `frontend/nginx.conf` | Proxy inverso: pasa `/api/*` y `/h2-console` al backend |
+| `.dockerignore` | Excluye `target/`, `.git/`, etc. del contexto de build del backend |
+| `frontend/.dockerignore` | Excluye `node_modules/`, `dist/`, etc. del contexto de build del frontend |
+| `docker-compose.yml` | Orquesta ambos servicios en la red `reservas-network` |
+
+#### Dockerfile — Backend
+
+Consta de dos etapas:
+
+1. **Build** — Imagen `maven:3.9-eclipse-temurin-21-alpine`
+   - Descarga dependencias primero (cachea la capa)
+   - Compila el proyecto con `mvn package -DskipTests`
+2. **Runtime** — Imagen `eclipse-temurin:21-jre-alpine`
+   - Copia el JAR generado
+   - Expone puerto `8081`
+   - Ejecuta `java -jar app.jar`
+
+#### Dockerfile — Frontend
+
+1. **Build** — Imagen `node:22-alpine`
+   - Instala dependencias con `npm ci`
+   - Compila con `npm run build` (Angular CLI)
+2. **Runtime** — Imagen `nginx:alpine`
+   - Copia los archivos estáticos desde `dist/frontend`
+   - Copia `nginx.conf` con la configuración de proxy
+   - Expone puerto `80`
+
+#### docker-compose.yml
+
+```yaml
+services:
+  backend:
+    build: .               # usa ./Dockerfile
+    container_name: reservas-backend
+    ports: [ "8081:8081" ]
+    networks: [ reservas-network ]
+
+  frontend:
+    build: ./frontend      # usa ./frontend/Dockerfile
+    container_name: reservas-frontend
+    ports: [ "80:80" ]
+    depends_on: [ backend ]
+    networks: [ reservas-network ]
+```
